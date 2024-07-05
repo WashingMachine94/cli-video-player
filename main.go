@@ -1,125 +1,96 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io"
-	"log"
 	"os"
-	"os/exec"
-	"regexp"
-	"runtime"
-	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/term"
 )
 
-const PREFIX string = "VideoPlayer:"
+const YELLOW_COLOR string = "\033[33m"
+const RED_COLOR string = "\033[31m"
+const RESET_COLOR string = "\033[0m"
+
+const PREFIX string = YELLOW_COLOR + "VideoPlayer:" + RESET_COLOR
+
+var CURRENT_VIDEO Video
+var TERMINAL_WIDTH int
+var TERMINAL_HEIGHT int
 
 func main() {
-
-	switch os.Args[1] {
-	case "play":
-		if _, err := os.Stat(os.Args[2]); err != nil {
-			fmt.Println(PREFIX, "File '"+os.Args[2]+"' could not be found.")
-			os.Exit(1)
-		}
-		playVideo(os.Args[2])
-	default:
-		fmt.Println(PREFIX, "Unknown command 'Skill Issue'.")
+	if _, err := os.Stat(os.Args[1]); err != nil {
+		fmt.Println(PREFIX, "File '"+os.Args[1]+"' could not be found.")
 		os.Exit(1)
 	}
+	playVideo(os.Args[1])
 }
 
 func playVideo(path string) {
-	cmd := exec.Command("./ffmpeg", "-i", path, "-f", "image2pipe", "-vcodec", "rawvideo", "-pix_fmt", "rgb24", "-")
+	setTerminalDimensions()
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatalf("Failed to get stdout pipe: %v", err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start FFmpeg command: %v", err)
-	}
+	CURRENT_VIDEO = loadVideo(path)
+	drawMenu()
 
-	buf := new(bytes.Buffer)
-	done := make(chan error, 1)
+	play(&CURRENT_VIDEO)
 
-	go func() {
-		_, err := io.Copy(buf, stdout)
-		done <- err
-	}()
+}
+func drawMenu() {
+	var runtime = int(CURRENT_VIDEO.duration.Seconds())
 
-	width, height, err := getVideoDimensions(path)
-	if err != nil {
-		log.Fatalf("Failed to get video dimensions: %v", err)
-	}
-	frameSize := width * height * 3
+	var currentTime = int(((time.Second / time.Duration(CURRENT_VIDEO.fps)) * time.Duration(CURRENT_VIDEO.currentFrame)).Seconds())
 
-	for {
-		if buf.Len() >= frameSize {
-			frame := buf.Next(frameSize)
-			processFrame(frame, width, height, 3)
-			time.Sleep(time.Second / 30)
+	startMinutes := currentTime / 60
+	startSeconds := currentTime % 60
+	var startTime string = fmt.Sprintf("[%d:%02d]", startMinutes, startSeconds)
+	var buttons string = "<- ▶ ->"
 
+	endMinutes := runtime / 60
+	endSeconds := runtime % 60
+	var endTime string = fmt.Sprintf("[%d:%02d]", endMinutes, endSeconds)
+	var spacing string = strings.Repeat(" ", (TERMINAL_WIDTH-len(startTime)-len(endTime)-len(buttons))/2+1)
+
+	var progressProcent float64 = float64(currentTime) / float64(runtime)
+	var progressChars int = int((float64(TERMINAL_WIDTH) - 2) * progressProcent)
+	var progressbar string = "["
+
+	for i := range TERMINAL_WIDTH - 2 {
+		if progressChars > i {
+			progressbar += "="
 		} else {
-			select {
-			case err := <-done:
-				if err != nil {
-					log.Fatalf("Failed to read FFmpeg output: %v", err)
-				}
-				return
-			default:
-				time.Sleep(10 * time.Millisecond)
-			}
+			progressbar += "·"
 		}
 	}
+	progressbar += "]"
+
+	fmt.Println(startTime + spacing + buttons + spacing + endTime)
+	fmt.Println(progressbar)
 }
+func setTerminalDimensions() {
+	fd := windows.Handle(windows.Stdout)
+	width, height, err := term.GetSize(int(fd))
+	if err != nil {
 
-func getVideoDimensions(path string) (int, int, error) {
-	// FFmpeg command to get video stream information
-	cmd := exec.Command("./ffmpeg", "-i", path)
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	// Run the command
-	if err := cmd.Run(); err != nil {
-		// FFmpeg writes the information to stderr
-		output := stderr.String()
-
-		// Use regex to extract width and height
-		re := regexp.MustCompile(`, (\d+)x(\d+)[, ]`)
-		matches := re.FindStringSubmatch(output)
-		if len(matches) == 3 {
-			width, err := strconv.Atoi(matches[1])
-			if err != nil {
-				return 0, 0, fmt.Errorf("failed to parse width: %v", err)
-			}
-			height, err := strconv.Atoi(matches[2])
-			if err != nil {
-				return 0, 0, fmt.Errorf("failed to parse height: %v", err)
-			}
-			return width, height, nil
-		}
-		return 0, 0, fmt.Errorf("failed to find video dimensions in output: %s", output)
 	}
-	return 0, 0, fmt.Errorf("ffmpeg command failed")
+	TERMINAL_WIDTH = width
+	TERMINAL_HEIGHT = height
 }
-
 func processFrame(frame []byte, width int, height int, channels int) {
 	var characters string = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/()1{}[]?-_+~<>i!lI;:,^`'. "
 
-	var maxWidth int = 160
-	var maxHeight int = 45
-	// var maxWidth int = 100
-	// var maxHeight int = 32
-	var pixelWidth int = int(float32(width) / float32(maxWidth))
-	var pixelHeight int = int(float32(height) / float32(maxHeight))
+	var frameWidth = TERMINAL_WIDTH
+	var frameHeight = TERMINAL_HEIGHT - 2
+
+	var pixelWidth int = int(float32(width) / float32(frameWidth))
+	var pixelHeight int = int(float32(height) / float32(frameHeight))
 
 	var screen string = ""
 
-	for row := range maxHeight {
-		for col := range maxWidth {
+	for row := range frameHeight {
+		screen += "\n"
+		for col := range frameWidth {
 			var x int = pixelWidth * col
 			var y int = pixelHeight * row
 
@@ -129,9 +100,6 @@ func processFrame(frame []byte, width int, height int, channels int) {
 				for pixelCol := range pixelWidth {
 					var localIndex int = (((y + pixelRow) * width) + x + pixelCol) * channels
 					brightness += int(frame[localIndex+1])
-					// for color := range channels {
-					// 	brightness += int(frame[localIndex+color])
-					// }
 				}
 			}
 			brightness /= (pixelHeight * pixelWidth * channels)
@@ -143,27 +111,10 @@ func processFrame(frame []byte, width int, height int, channels int) {
 			}
 			screen += string(characters[charIndex])
 		}
-		screen += "\n"
 	}
-	clearTerminal()
-	fmt.Println(screen)
-
-}
-
-func runCmd(name string, arg ...string) {
-	cmd := exec.Command(name, arg...)
-	cmd.Stdout = os.Stdout
-	cmd.Run()
-}
-func clearTerminal() {
-	switch runtime.GOOS {
-	case "darwin":
-		runCmd("clear")
-	case "linux":
-		runCmd("clear")
-	case "windows":
-		runCmd("cmd", "/c", "cls")
-	default:
-		runCmd("clear")
-	}
+	fmt.Print("\033[2J") // Clears entire screen
+	fmt.Print("\033[H")  // Moves cursor to top-left corner
+	fmt.Print(screen)
+	os.Stdout.Sync()
+	drawMenu()
 }

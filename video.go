@@ -12,11 +12,12 @@ import (
 )
 
 type Video struct {
-	filepath string
-	duration time.Duration
-	width    int
-	height   int
-	fps      float64
+	filepath     string
+	duration     time.Duration
+	width        int
+	height       int
+	fps          float64
+	currentFrame int
 }
 
 func loadVideo(filepath string) Video {
@@ -60,7 +61,7 @@ func loadVideo(filepath string) Video {
 		totalMilliseconds := (hours*3600+minutes*60+seconds)*1000 + milliseconds
 		duration = time.Duration(totalMilliseconds) * time.Millisecond
 
-		return Video{filepath, duration, int(width), int(height), fps}
+		return Video{filepath, duration, int(width), int(height), fps, 0}
 	}
 	return Video{}
 }
@@ -94,6 +95,7 @@ func play(video *Video) {
 			frame := buf.Next(frameSize)
 			processFrame(frame, video.width, video.height, 3)
 			time.Sleep(time.Second / time.Duration(video.fps))
+			video.currentFrame++
 
 		} else {
 			select {
