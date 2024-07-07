@@ -37,17 +37,11 @@ func main() {
 
 func playVideo(path string) {
 	CURRENT_VIDEO = loadVideo(path)
-	fmt.Println(CURRENT_VIDEO.height)
-	bufferVideo(&CURRENT_VIDEO)
+	go bufferVideo(&CURRENT_VIDEO)
 
 	setTerminalDimensions()
 
 	PLAYING = true
-
-	frameYes, _ := getFrame(&CURRENT_VIDEO, CURRENT_VIDEO.currentFrame)
-
-	fmt.Println(frameYes)
-	return
 
 	for PLAYING {
 		startFrameTime := time.Now()
@@ -61,11 +55,8 @@ func playVideo(path string) {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-
-		sleepTime := time.Since(startFrameTime)
-		if sleepTime > 0 {
-			time.Sleep(sleepTime)
-		}
+		var deltaTime time.Duration = time.Now().Sub(startFrameTime)
+		time.Sleep((time.Second / time.Duration(CURRENT_VIDEO.fps)) - deltaTime)
 	}
 }
 

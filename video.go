@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log"
 	"os/exec"
@@ -123,15 +122,10 @@ func bufferVideo(video *Video) {
 			return
 		default:
 			if buf.Len() >= frameSize {
-				frame := buf.Next(frameSize)
+				frame := make([]byte, frameSize)
+				copy(frame, buf.Next(frameSize))
 				video.bufferMutex.Lock()
 				video.bufferedFrames[bufferFrame] = frame
-				if bufferFrame == 150 {
-					fmt.Println(video.bufferedFrames[bufferFrame])
-
-					video.bufferMutex.Unlock()
-					return
-				}
 				bufferFrame++
 				video.bufferMutex.Unlock()
 			} else {
@@ -143,8 +137,7 @@ func bufferVideo(video *Video) {
 
 func getFrame(video *Video, frameNumber int) ([]byte, bool) {
 	video.bufferMutex.Lock()
-	// defer video.bufferMutex.Unlock()
+	defer video.bufferMutex.Unlock()
 	frame, exists := video.bufferedFrames[frameNumber]
-	video.bufferMutex.Unlock()
 	return frame, exists
 }
