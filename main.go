@@ -19,24 +19,56 @@ const PREFIX string = YELLOW_COLOR + "VideoPlayer:" + RESET_COLOR
 var CURRENT_VIDEO Video
 var TERMINAL_WIDTH int
 var TERMINAL_HEIGHT int
+var PLAYING bool
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println(PREFIX, "Usage: go run main.go <video_path>")
+		os.Exit(1)
+	}
+
 	if _, err := os.Stat(os.Args[1]); err != nil {
 		fmt.Println(PREFIX, "File '"+os.Args[1]+"' could not be found.")
 		os.Exit(1)
 	}
+
 	playVideo(os.Args[1])
 }
 
 func playVideo(path string) {
+	CURRENT_VIDEO = loadVideo(path)
+	fmt.Println(CURRENT_VIDEO.height)
+	bufferVideo(&CURRENT_VIDEO)
+
 	setTerminalDimensions()
 
-	CURRENT_VIDEO = loadVideo(path)
-	drawMenu()
+	PLAYING = true
 
-	play(&CURRENT_VIDEO)
+	frameYes, _ := getFrame(&CURRENT_VIDEO, CURRENT_VIDEO.currentFrame)
 
+	fmt.Println(frameYes)
+	return
+
+	for PLAYING {
+		startFrameTime := time.Now()
+
+		frame, exists := getFrame(&CURRENT_VIDEO, CURRENT_VIDEO.currentFrame)
+		if exists {
+			processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+			CURRENT_VIDEO.currentFrame++
+		} else {
+			// Wait for buffering if frame is not yet available
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+
+		sleepTime := time.Since(startFrameTime)
+		if sleepTime > 0 {
+			time.Sleep(sleepTime)
+		}
+	}
 }
+
 func drawMenu() {
 	var runtime = int(CURRENT_VIDEO.duration.Seconds())
 
@@ -56,7 +88,7 @@ func drawMenu() {
 	var progressChars int = int((float64(TERMINAL_WIDTH) - 2) * progressProcent)
 	var progressbar string = "["
 
-	for i := range TERMINAL_WIDTH - 2 {
+	for i := 0; i < TERMINAL_WIDTH-2; i++ {
 		if progressChars > i {
 			progressbar += "="
 		} else {
@@ -68,15 +100,18 @@ func drawMenu() {
 	fmt.Println(startTime + spacing + buttons + spacing + endTime)
 	fmt.Println(progressbar)
 }
+
 func setTerminalDimensions() {
 	fd := windows.Handle(windows.Stdout)
 	width, height, err := term.GetSize(int(fd))
 	if err != nil {
-
+		fmt.Println(PREFIX, "Error getting terminal dimensions:", err)
+		os.Exit(1)
 	}
 	TERMINAL_WIDTH = width
 	TERMINAL_HEIGHT = height
 }
+
 func processFrame(frame []byte, width int, height int, channels int) {
 	var characters string = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/()1{}[]?-_+~<>i!lI;:,^`'. "
 
@@ -88,16 +123,16 @@ func processFrame(frame []byte, width int, height int, channels int) {
 
 	var screen string = ""
 
-	for row := range frameHeight {
+	for row := 0; row < frameHeight; row++ {
 		screen += "\n"
-		for col := range frameWidth {
+		for col := 0; col < frameWidth; col++ {
 			var x int = pixelWidth * col
 			var y int = pixelHeight * row
 
 			var brightness int
 
-			for pixelRow := range pixelHeight {
-				for pixelCol := range pixelWidth {
+			for pixelRow := 0; pixelRow < pixelHeight; pixelRow++ {
+				for pixelCol := 0; pixelCol < pixelWidth; pixelCol++ {
 					var localIndex int = (((y + pixelRow) * width) + x + pixelCol) * channels
 					brightness += int(frame[localIndex+1])
 				}
@@ -112,8 +147,7 @@ func processFrame(frame []byte, width int, height int, channels int) {
 			screen += string(characters[charIndex])
 		}
 	}
-	fmt.Print("\033[2J") // Clears entire screen
-	fmt.Print("\033[H")  // Moves cursor to top-left corner
+	fmt.Printf("\033[0;0H")
 	fmt.Print(screen)
 	os.Stdout.Sync()
 	drawMenu()

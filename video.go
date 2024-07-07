@@ -2,22 +2,27 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type Video struct {
-	filepath     string
-	duration     time.Duration
-	width        int
-	height       int
-	fps          float64
-	currentFrame int
+	filepath       string
+	duration       time.Duration
+	width          int
+	height         int
+	fps            float64
+	currentFrame   int
+	bufferedFrames map[int][]byte
+	bufferMutex    sync.Mutex
+	bufferComplete bool
 }
 
 func loadVideo(filepath string) Video {
@@ -61,12 +66,19 @@ func loadVideo(filepath string) Video {
 		totalMilliseconds := (hours*3600+minutes*60+seconds)*1000 + milliseconds
 		duration = time.Duration(totalMilliseconds) * time.Millisecond
 
-		return Video{filepath, duration, int(width), int(height), fps, 0}
+		return Video{
+			filepath:       filepath,
+			duration:       duration,
+			width:          int(width),
+			height:         int(height),
+			fps:            fps,
+			bufferedFrames: make(map[int][]byte),
+		}
 	}
 	return Video{}
 }
 
-func play(video *Video) {
+func bufferVideo(video *Video) {
 	cmd := exec.Command("./ffmpeg", "-i", video.filepath, "-f", "image2pipe", "-vcodec", "rawvideo", "-pix_fmt", "rgb24", "-")
 
 	stdout, err := cmd.StdoutPipe()
@@ -88,25 +100,51 @@ func play(video *Video) {
 	if err != nil {
 		log.Fatalf("Failed to get video dimensions: %v", err)
 	}
+
 	frameSize := video.width * video.height * 3
+	var bufferFrame int = 0
 
 	for {
-		if buf.Len() >= frameSize {
-			frame := buf.Next(frameSize)
-			processFrame(frame, video.width, video.height, 3)
-			time.Sleep(time.Second / time.Duration(video.fps))
-			video.currentFrame++
+		select {
+		case err := <-done:
+			if err != nil && err != io.EOF {
+				log.Fatalf("Failed to copy data from ffmpeg: %v", err)
+			}
+			// Process remaining buffered data if any
+			for buf.Len() >= frameSize {
+				frame := buf.Next(frameSize)
+				video.bufferMutex.Lock()
+				video.bufferedFrames[bufferFrame] = frame
+				bufferFrame++
+				video.bufferMutex.Unlock()
+			}
+			video.bufferComplete = true
+			log.Println("Buffering complete")
+			return
+		default:
+			if buf.Len() >= frameSize {
+				frame := buf.Next(frameSize)
+				video.bufferMutex.Lock()
+				video.bufferedFrames[bufferFrame] = frame
+				if bufferFrame == 150 {
+					fmt.Println(video.bufferedFrames[bufferFrame])
 
-		} else {
-			select {
-			case err := <-done:
-				if err != nil {
-					log.Fatalf("Failed to read FFmpeg output: %v", err)
+					video.bufferMutex.Unlock()
+					return
 				}
-				return
-			default:
+				bufferFrame++
+				video.bufferMutex.Unlock()
+			} else {
 				time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}
+}
+
+func getFrame(video *Video, frameNumber int) ([]byte, bool) {
+	video.bufferMutex.Lock()
+	// defer video.bufferMutex.Unlock()
+	frame, exists := video.bufferedFrames[frameNumber]
+	video.bufferMutex.Unlock()
+	return frame, exists
 }
