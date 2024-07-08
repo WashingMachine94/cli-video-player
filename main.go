@@ -43,20 +43,22 @@ func playVideo(path string) {
 
 	PLAYING = true
 
+	fmt.Println()
+
 	for PLAYING {
 		startFrameTime := time.Now()
 
 		frame, exists := getFrame(&CURRENT_VIDEO, CURRENT_VIDEO.currentFrame)
 		if exists {
 			processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
-			CURRENT_VIDEO.currentFrame++
+			CURRENT_VIDEO.currentFrame += 2
 		} else {
 			// Wait for buffering if frame is not yet available
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		var deltaTime time.Duration = time.Now().Sub(startFrameTime)
-		time.Sleep((time.Second / time.Duration(CURRENT_VIDEO.fps)) - deltaTime)
+		time.Sleep((time.Second / time.Duration(CURRENT_VIDEO.fps/2)) - deltaTime)
 	}
 }
 
@@ -89,7 +91,7 @@ func drawMenu() {
 	progressbar += "]"
 
 	fmt.Println(startTime + spacing + buttons + spacing + endTime)
-	fmt.Println(progressbar)
+	fmt.Print(progressbar)
 }
 
 func setTerminalDimensions() {
@@ -107,7 +109,7 @@ func processFrame(frame []byte, width int, height int, channels int) {
 	var characters string = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/()1{}[]?-_+~<>i!lI;:,^`'. "
 
 	var frameWidth = TERMINAL_WIDTH
-	var frameHeight = TERMINAL_HEIGHT - 2
+	var frameHeight = TERMINAL_HEIGHT - 3
 
 	var pixelWidth int = int(float32(width) / float32(frameWidth))
 	var pixelHeight int = int(float32(height) / float32(frameHeight))
