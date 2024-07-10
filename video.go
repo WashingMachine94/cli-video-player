@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"os/exec"
@@ -12,19 +13,22 @@ import (
 	"time"
 )
 
+type Frame []byte
+
 type Video struct {
 	filepath       string
 	duration       time.Duration
 	width          int
 	height         int
 	fps            float64
+	totalFrames    int
 	currentFrame   int
-	bufferedFrames map[int][]byte
+	frameBuffer    []Frame
 	bufferMutex    sync.Mutex
 	bufferComplete bool
 }
 
-func loadVideo(filepath string) Video {
+func loadVideo(filepath string, maxBufferLen int) Video {
 	// FFmpeg get video stream information
 	cmd := exec.Command("./ffmpeg", "-i", filepath)
 
@@ -65,79 +69,130 @@ func loadVideo(filepath string) Video {
 		totalMilliseconds := (hours*3600+minutes*60+seconds)*1000 + milliseconds
 		duration = time.Duration(totalMilliseconds) * time.Millisecond
 
+		totalFrames := duration.Seconds() * fps
+
 		return Video{
-			filepath:       filepath,
-			duration:       duration,
-			width:          int(width),
-			height:         int(height),
-			fps:            fps,
-			bufferedFrames: make(map[int][]byte),
+			filepath:    filepath,
+			duration:    duration,
+			width:       int(width),
+			height:      int(height),
+			totalFrames: int(totalFrames),
+			fps:         fps,
+			frameBuffer: make([]Frame, 0, maxBufferLen),
 		}
 	}
 	return Video{}
 }
 
-func bufferVideo(video *Video) {
-	cmd := exec.Command("./ffmpeg", "-i", video.filepath, "-f", "image2pipe", "-vcodec", "rawvideo", "-pix_fmt", "rgb24", "-")
+func bufferVideo(video *Video, startFrame int, frameAmount int) {
+	// Construct ffmpeg command
+	// selectFilter := fmt.Sprintf("select='gte(n\\,%d)',setpts=N/FRAME_RATE/TB", startFrame)
+	// selectFilter := fmt.Sprintf("select='between(n\\,%d\\,%d)',setpts=N/FRAME_RATE/TB", startFrame, startFrame+frameAmount)
+	// fmt.Println(startFrame+frameAmount, frameAmount)
+	// startTime := float64(startFrame) / video.fps
+	endFrame := startFrame + frameAmount
 
+	// Select filter to capture exact frames
+	selectFilter := fmt.Sprintf("select='gte(n\\,%d)*lte(n\\,%d)',setpts=N/FRAME_RATE/TB", startFrame, endFrame)
+
+	args := []string{
+		// "-ss", fmt.Sprintf("%.6f", startTime), // Accurate start time
+		"-i", video.filepath,
+		"-vf", selectFilter,
+		"-f", "image2pipe",
+		"-vcodec", "rawvideo",
+		"-pix_fmt", "rgb24",
+		"-vsync", "vfr", // Handle variable frame rate
+		"-frames:v", strconv.Itoa(frameAmount), // Exact number of frames
+		"-",
+	}
+	cmd := exec.Command("./ffmpeg", args...)
 	stdout, err := cmd.StdoutPipe()
+
 	if err != nil {
 		log.Fatalf("Failed to get stdout pipe: %v", err)
 	}
+	defer stdout.Close()
+
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start FFmpeg command: %v", err)
 	}
 
-	buf := new(bytes.Buffer)
+	frameSize := video.width * video.height * 3
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := io.Copy(buf, stdout)
-		done <- err
-	}()
-
-	if err != nil {
-		log.Fatalf("Failed to get video dimensions: %v", err)
-	}
-
-	frameSize := video.width * video.height * 3
-	var bufferFrame int = 0
-
-	for {
-		select {
-		case err := <-done:
-			if err != nil && err != io.EOF {
-				log.Fatalf("Failed to copy data from ffmpeg: %v", err)
+		var f int = 0
+		buf := make(Frame, frameSize)
+		for {
+			n, err := io.ReadFull(stdout, buf)
+			if err == io.EOF {
+				done <- nil
+				break
 			}
-			// Process remaining buffered data if any
-			for buf.Len() >= frameSize {
-				frame := buf.Next(frameSize)
-				video.bufferMutex.Lock()
-				video.bufferedFrames[bufferFrame] = frame
-				bufferFrame++
-				video.bufferMutex.Unlock()
+			if err != nil {
+				done <- err
+				break
 			}
-			video.bufferComplete = true
-			log.Println("Buffering complete")
-			return
-		default:
-			if buf.Len() >= frameSize {
-				frame := make([]byte, frameSize)
-				copy(frame, buf.Next(frameSize))
+			if n == frameSize {
+				var frame Frame = make(Frame, frameSize)
+				copy(frame, buf)
+
 				video.bufferMutex.Lock()
-				video.bufferedFrames[bufferFrame] = frame
-				bufferFrame++
+				video.frameBuffer = append(video.frameBuffer, frame)
 				video.bufferMutex.Unlock()
-			} else {
-				time.Sleep(10 * time.Millisecond)
+				// fmt.Println("frame:", f, "buflen:", len(video.frameBuffer), "realframe:", video.currentFrame)
+				f++
 			}
 		}
+		stdout.Close()
+		close(done)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			log.Fatalf("Failed during FFmpeg execution: %v", err)
+		}
+	}
+
+	if err := cmd.Wait(); err != nil {
+		log.Fatalf("FFmpeg command failed: %v", err)
 	}
 }
 
-func getFrame(video *Video, frameNumber int) ([]byte, bool) {
+func getFrame(video *Video) (*Frame, bool) {
 	video.bufferMutex.Lock()
 	defer video.bufferMutex.Unlock()
-	frame, exists := video.bufferedFrames[frameNumber]
-	return frame, exists
+	if len(video.frameBuffer) < 1 {
+		return nil, false
+	}
+	frame := video.frameBuffer[0]
+	return &frame, true
+}
+func stepForward(video *Video) {
+	clearBuffer(video)
+	video.currentFrame += SKIP_AMOUNT_S * int(video.fps)
+	if video.currentFrame > video.totalFrames {
+		video.currentFrame = video.totalFrames
+	}
+	bufferVideo(video, video.currentFrame, BUFFER_OFFSET)
+}
+func stepBackward(video *Video) {
+	clearBuffer(video)
+	video.currentFrame -= SKIP_AMOUNT_S * int(video.fps)
+	if video.currentFrame < 1 {
+		video.currentFrame = 1
+	}
+	bufferVideo(video, video.currentFrame, BUFFER_OFFSET)
+}
+func shiftBuffer(video *Video) {
+	video.bufferMutex.Lock()
+	defer video.bufferMutex.Unlock()
+	video.frameBuffer = video.frameBuffer[1:]
+}
+func clearBuffer(video *Video) {
+	video.bufferMutex.Lock()
+	defer video.bufferMutex.Unlock()
+	video.frameBuffer = video.frameBuffer[:0]
 }
