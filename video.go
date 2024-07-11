@@ -86,26 +86,18 @@ func loadVideo(filepath string, maxBufferLen int) Video {
 
 func bufferVideo(video *Video, startFrame int, frameAmount int) {
 	// Construct ffmpeg command
-	// selectFilter := fmt.Sprintf("select='gte(n\\,%d)',setpts=N/FRAME_RATE/TB", startFrame)
-	// selectFilter := fmt.Sprintf("select='between(n\\,%d\\,%d)',setpts=N/FRAME_RATE/TB", startFrame, startFrame+frameAmount)
-	// fmt.Println(startFrame+frameAmount, frameAmount)
-	// startTime := float64(startFrame) / video.fps
-	endFrame := startFrame + frameAmount
-
-	// Select filter to capture exact frames
-	selectFilter := fmt.Sprintf("select='gte(n\\,%d)*lte(n\\,%d)',setpts=N/FRAME_RATE/TB", startFrame, endFrame)
-
 	args := []string{
-		// "-ss", fmt.Sprintf("%.6f", startTime), // Accurate start time
+		"-ss", fmt.Sprintf("%.6f", float64(startFrame)/video.fps),
 		"-i", video.filepath,
-		"-vf", selectFilter,
+		"-frames:v", strconv.Itoa(frameAmount),
+		"-vf", "fps=30",
 		"-f", "image2pipe",
 		"-vcodec", "rawvideo",
 		"-pix_fmt", "rgb24",
-		"-vsync", "vfr", // Handle variable frame rate
-		"-frames:v", strconv.Itoa(frameAmount), // Exact number of frames
+		"-vsync", "vfr",
 		"-",
 	}
+
 	cmd := exec.Command("./ffmpeg", args...)
 	stdout, err := cmd.StdoutPipe()
 
@@ -141,8 +133,10 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 				video.bufferMutex.Lock()
 				video.frameBuffer = append(video.frameBuffer, frame)
 				video.bufferMutex.Unlock()
-				// fmt.Println("frame:", f, "buflen:", len(video.frameBuffer), "realframe:", video.currentFrame)
 				f++
+			}
+			if n != frameSize {
+				fmt.Println("Frame size mismatch: expected", frameSize, "got", n)
 			}
 		}
 		stdout.Close()
@@ -189,7 +183,9 @@ func stepBackward(video *Video) {
 func shiftBuffer(video *Video) {
 	video.bufferMutex.Lock()
 	defer video.bufferMutex.Unlock()
-	video.frameBuffer = video.frameBuffer[1:]
+	if len(video.frameBuffer) > 0 {
+		video.frameBuffer = video.frameBuffer[1:]
+	}
 }
 func clearBuffer(video *Video) {
 	video.bufferMutex.Lock()

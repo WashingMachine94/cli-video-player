@@ -19,8 +19,8 @@ const RESET_COLOR string = "\033[0m"
 
 const PREFIX_TEXT = "VideoPlayer:"
 const PREFIX string = YELLOW_COLOR + PREFIX_TEXT + RESET_COLOR
-const BUFFER_SIZE int = 30
-const BUFFER_OFFSET int = 60
+const BUFFER_SIZE int = 15
+const BUFFER_OFFSET int = 30
 const SKIP_AMOUNT_S int = 10
 
 var CURRENT_VIDEO Video
@@ -49,7 +49,7 @@ func main() {
 
 func playVideo(path string) {
 	CURRENT_VIDEO = loadVideo(path, BUFFER_OFFSET*2)
-	bufferVideo(&CURRENT_VIDEO, 0, BUFFER_OFFSET*2)
+	bufferVideo(&CURRENT_VIDEO, 0, BUFFER_OFFSET)
 	setTerminalDimensions()
 	go handleInput()
 
