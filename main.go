@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -11,11 +10,29 @@ import (
 	"golang.org/x/term"
 )
 
-const YELLOW_COLOR string = "\033[33m"
-const RED_COLOR string = "\033[31m"
-const BLUE_COLOR string = "\033[34m"
-const CYAN_COLOR string = "\033[36m"
-const RESET_COLOR string = "\033[0m"
+const (
+	YELLOW_COLOR    string = "\033[33m"
+	RED_COLOR       string = "\033[31m"
+	BLUE_COLOR      string = "\033[34m"
+	CYAN_COLOR      string = "\033[36m"
+	RESET_COLOR     string = "\033[0m"
+	GREEN_COLOR     string = "\033[32m"
+	MAGENTA_COLOR   string = "\033[35m"
+	WHITE_COLOR     string = "\033[37m"
+	BLACK_COLOR     string = "\033[30m"
+	BOLD_COLOR      string = "\033[1m"
+	UNDERLINE_COLOR string = "\033[4m"
+	ORANGE_COLOR    string = "\033[38;5;208m"
+)
+
+var (
+	BUTTON_BACK_H    = fmt.Sprint(ORANGE_COLOR, "[", YELLOW_COLOR, "<", ORANGE_COLOR, "]", RESET_COLOR)
+	BUTTON_BACK      = "[<]"
+	BUTTON_FORWARD_H = fmt.Sprint(ORANGE_COLOR, "[", YELLOW_COLOR, ">", ORANGE_COLOR, "]", RESET_COLOR)
+	BUTTON_FORWARD   = "[>]"
+	BUTTON_PLAYING   = "  ||  "
+	BUTTON_PAUSED    = "  ▶  "
+)
 
 const PREFIX_TEXT = "VideoPlayer:"
 const PREFIX string = YELLOW_COLOR + PREFIX_TEXT + RESET_COLOR
@@ -49,6 +66,10 @@ func main() {
 
 func playVideo(path string) {
 	CURRENT_VIDEO = loadVideo(path, BUFFER_OFFSET*2)
+	if CURRENT_VIDEO.fps == 0 {
+		fmt.Println(PREFIX, "'"+path+"' is not a valid video.")
+		return
+	}
 	bufferVideo(&CURRENT_VIDEO, 0, BUFFER_OFFSET)
 	setTerminalDimensions()
 	go handleInput()
@@ -71,26 +92,14 @@ func playVideo(path string) {
 					go bufferVideo(&CURRENT_VIDEO, CURRENT_VIDEO.currentFrame+BUFFER_OFFSET, BUFFER_SIZE)
 				}
 				CURRENT_VIDEO.currentFrame++
-
 			} else {
 				time.Sleep(1 * time.Second)
 				continue
 			}
 		}
-		if SKIP_FORWARD {
-			stepForward(&CURRENT_VIDEO)
-			frame, _ := getFrame(&CURRENT_VIDEO)
-			processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
-			SKIP_FORWARD = false
-		}
-		if SKIP_BACKWARD {
-			stepBackward(&CURRENT_VIDEO)
-			frame, _ := getFrame(&CURRENT_VIDEO)
-			processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
-			SKIP_BACKWARD = false
-		}
 
 		drawMenu()
+		handleSkip()
 
 		var deltaTime time.Duration = time.Now().Sub(startFrameTime)
 		time.Sleep((time.Second / time.Duration(CURRENT_VIDEO.fps)) - deltaTime)
@@ -102,23 +111,38 @@ func playVideo(path string) {
 
 func drawMenu() {
 	var runtime = int(CURRENT_VIDEO.duration.Seconds())
-
 	var currentTime = int(((time.Second / time.Duration(CURRENT_VIDEO.fps)) * time.Duration(CURRENT_VIDEO.currentFrame)).Seconds())
-
-	startMinutes := currentTime / 60
-	startSeconds := currentTime % 60
-	var startTime string = fmt.Sprintf("[%d:%02d]", startMinutes, startSeconds)
-	var buttons string = ""
-	if PAUSED {
-		buttons = "[<]  ▶  [>]"
-	} else {
-		buttons = "[<]  ||  [>]"
-	}
-
+	currentMinutes := currentTime / 60
+	currentSeconds := currentTime % 60
 	endMinutes := runtime / 60
 	endSeconds := runtime % 60
-	var endTime string = fmt.Sprintf("[%d:%02d]", endMinutes, endSeconds)
-	var spacing string = strings.Repeat(" ", (TERMINAL_WIDTH-len(startTime)-len(endTime)-len(buttons))/2)
+
+	var currentTimeWidth int = len(fmt.Sprintf("[%d:%02d]", currentMinutes, currentSeconds))
+	var currentTimeText string = fmt.Sprintf(BLUE_COLOR+"["+CYAN_COLOR+"%d:%02d"+BLUE_COLOR+"]"+RESET_COLOR, currentMinutes, currentSeconds)
+	var endTimeWidth int = len(fmt.Sprintf("[%d:%02d]", endMinutes, endSeconds))
+	var endTime string = fmt.Sprintf(BLUE_COLOR+"["+CYAN_COLOR+"%d:%02d"+BLUE_COLOR+"]"+RESET_COLOR, endMinutes, endSeconds)
+
+	var buttonsWidth int = 0
+	var buttons string = ""
+	if SKIP_BACKWARD {
+		buttons += BUTTON_BACK_H
+	} else {
+		buttons += BUTTON_BACK
+	}
+	if PAUSED {
+		buttonsWidth = 11
+		buttons += BUTTON_PAUSED
+	} else {
+		buttonsWidth = 12
+		buttons += BUTTON_PLAYING
+	}
+	if SKIP_FORWARD {
+		buttons += BUTTON_FORWARD_H
+	} else {
+		buttons += BUTTON_FORWARD
+	}
+
+	var spacing string = strings.Repeat(" ", (TERMINAL_WIDTH-currentTimeWidth-endTimeWidth-buttonsWidth)/2)
 
 	var progressProcent float64 = float64(currentTime) / float64(runtime)
 	var progressChars int = int((float64(TERMINAL_WIDTH) - 2) * progressProcent)
@@ -134,7 +158,7 @@ func drawMenu() {
 	progressbar += BLUE_COLOR + "]" + RESET_COLOR
 
 	fmt.Printf("\033[%d;0H", TERMINAL_HEIGHT-1)
-	fmt.Println(startTime + spacing + buttons + spacing + endTime)
+	fmt.Println(currentTimeText + spacing + buttons + spacing + endTime)
 	fmt.Print(progressbar)
 }
 
@@ -167,7 +191,21 @@ func handleInput() {
 			os.Exit(1)
 		}
 	}
+}
 
+func handleSkip() {
+	if SKIP_FORWARD {
+		stepForward(&CURRENT_VIDEO)
+		frame, _ := getFrame(&CURRENT_VIDEO)
+		processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		SKIP_FORWARD = false
+	}
+	if SKIP_BACKWARD {
+		stepBackward(&CURRENT_VIDEO)
+		frame, _ := getFrame(&CURRENT_VIDEO)
+		processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		SKIP_BACKWARD = false
+	}
 }
 
 func setTerminalDimensions() {
@@ -191,8 +229,7 @@ func processFrame(frameptr *Frame, width int, height int, channels int) {
 	var pixelWidth int = int(float32(width) / float32(frameWidth))
 	var pixelHeight int = int(float32(height) / float32(frameHeight))
 
-	// var screen string = "[q]uit"
-	var screen string = strconv.Itoa(len(CURRENT_VIDEO.frameBuffer))
+	var screen string = "[q]uit"
 
 	for row := 0; row < frameHeight; row++ {
 		screen += "\n"

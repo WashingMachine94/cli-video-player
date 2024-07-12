@@ -45,6 +45,9 @@ func loadVideo(filepath string, maxBufferLen int) Video {
 		// Use regex to extract video information
 		re := regexp.MustCompile(`, (\d+)x(\d+)[, ]`)
 		matches := re.FindStringSubmatch(output)
+		if len(matches) == 0 {
+			return Video{}
+		}
 		width, _ = strconv.Atoi(matches[1])
 		height, _ = strconv.Atoi(matches[2])
 
@@ -90,7 +93,7 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 		"-ss", fmt.Sprintf("%.6f", float64(startFrame)/video.fps),
 		"-i", video.filepath,
 		"-frames:v", strconv.Itoa(frameAmount),
-		"-vf", "fps=30",
+		"-vf", fmt.Sprintf("fps=%.5f", video.fps),
 		"-f", "image2pipe",
 		"-vcodec", "rawvideo",
 		"-pix_fmt", "rgb24",
