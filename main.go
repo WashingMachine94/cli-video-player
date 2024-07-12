@@ -11,24 +11,16 @@ import (
 )
 
 const (
-	YELLOW_COLOR    string = "\033[33m"
-	RED_COLOR       string = "\033[31m"
-	BLUE_COLOR      string = "\033[34m"
-	CYAN_COLOR      string = "\033[36m"
-	RESET_COLOR     string = "\033[0m"
-	GREEN_COLOR     string = "\033[32m"
-	MAGENTA_COLOR   string = "\033[35m"
-	WHITE_COLOR     string = "\033[37m"
-	BLACK_COLOR     string = "\033[30m"
-	BOLD_COLOR      string = "\033[1m"
-	UNDERLINE_COLOR string = "\033[4m"
-	ORANGE_COLOR    string = "\033[38;5;208m"
+	YELLOW_COLOR string = "\033[33m"
+	BLUE_COLOR   string = "\033[34m"
+	CYAN_COLOR   string = "\033[36m"
+	RESET_COLOR  string = "\033[0m"
+	ORANGE_COLOR string = "\033[38;5;208m"
 )
-
-var (
-	BUTTON_BACK_H    = fmt.Sprint(ORANGE_COLOR, "[", YELLOW_COLOR, "<", ORANGE_COLOR, "]", RESET_COLOR)
+const (
+	BUTTON_BACK_H    = ORANGE_COLOR + "[" + YELLOW_COLOR + "<" + ORANGE_COLOR + "]" + RESET_COLOR
 	BUTTON_BACK      = "[<]"
-	BUTTON_FORWARD_H = fmt.Sprint(ORANGE_COLOR, "[", YELLOW_COLOR, ">", ORANGE_COLOR, "]", RESET_COLOR)
+	BUTTON_FORWARD_H = ORANGE_COLOR + "[" + YELLOW_COLOR + ">" + ORANGE_COLOR + "]" + RESET_COLOR
 	BUTTON_FORWARD   = "[>]"
 	BUTTON_PLAYING   = "  ||  "
 	BUTTON_PAUSED    = "  ▶  "

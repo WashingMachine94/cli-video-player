@@ -45,6 +45,7 @@ func loadVideo(filepath string, maxBufferLen int) Video {
 		// Use regex to extract video information
 		re := regexp.MustCompile(`, (\d+)x(\d+)[, ]`)
 		matches := re.FindStringSubmatch(output)
+		// if fps isnt found its likely not a video
 		if len(matches) == 0 {
 			return Video{}
 		}
