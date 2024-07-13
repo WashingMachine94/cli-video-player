@@ -76,6 +76,12 @@ func playVideo(path string) {
 
 	drawMenu()
 
+	frame, _ := getFrame(&CURRENT_VIDEO)
+	oldFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+	fmt.Println("[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]")
+	printFrame(oldFrame)
+	shiftBuffer(&CURRENT_VIDEO)
+
 	for PLAYING {
 		startFrameTime := time.Now()
 
@@ -83,7 +89,11 @@ func playVideo(path string) {
 		if !PAUSED {
 			if exists {
 				setTerminalDimensions()
-				processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+				newFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+				frameDiff := getFrameDiff(oldFrame, newFrame)
+				printFrame(&frameDiff)
+				oldFrame = newFrame
+
 				shiftBuffer(&CURRENT_VIDEO)
 				if CURRENT_VIDEO.currentFrame%BUFFER_SIZE == 0 {
 					go bufferVideo(&CURRENT_VIDEO, CURRENT_VIDEO.currentFrame+BUFFER_OFFSET, BUFFER_SIZE)
@@ -152,12 +162,11 @@ func drawMenu() {
 			progressbar += "□"
 		}
 	}
+	gotoPos := fmt.Sprintf("\033[%d;0H", TERMINAL_HEIGHT-1)
+	menubar := currentTimeText + spacing + buttons + spacing + endTime
 	progressbar += BLUE_COLOR + "]" + RESET_COLOR
 
-	fmt.Printf("\033[%d;0H", TERMINAL_HEIGHT-1)
-	fmt.Println(currentTimeText + spacing + buttons + spacing + endTime)
-	fmt.Print(progressbar)
-	fmt.Printf("\033[0;0H")
+	fmt.Print(gotoPos + menubar + progressbar + "\033[0;0H")
 }
 
 func handleInput() {
@@ -221,7 +230,7 @@ func setTerminalDimensions() {
 	TERMINAL_HEIGHT = height
 }
 
-func processFrame(frameptr *Frame, width int, height int, channels int) {
+func processFrame(frameptr *Frame, width int, height int, channels int) *string {
 	frame := *frameptr
 	var characters string = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/()1{}[]?-_+~<>i!lI;:,^`'. "
 
@@ -232,9 +241,10 @@ func processFrame(frameptr *Frame, width int, height int, channels int) {
 	var pixelHeight float32 = float32(height) / float32(frameHeight)
 
 	// var screen string = "[q]uit [h]elp"
-	var screen string = "[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]"
+	// var screen string = "[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]"
+	var screen string = ""
 
-	screen += "\n"
+	// screen += "\n"
 	for row := 0; row < frameHeight; row++ {
 		for col := 0; col < frameWidth; col++ {
 			var x int = int(pixelWidth * float32(col))
@@ -258,49 +268,27 @@ func processFrame(frameptr *Frame, width int, height int, channels int) {
 			screen += string(characters[charIndex])
 		}
 	}
-	fmt.Printf("\033[0;0H")
-	fmt.Print(screen)
-	os.Stdout.Sync()
+	// fmt.Printf("\033[0;0H")
+	// fmt.Print(screen)
+	return &screen
 }
-
-// func getFrameDiff(oldFramePtr *string, newFramePtr *string) string {
-//
-// 	oldLines := strings.Split(*oldFramePtr, "\n")
-// 	newLines := strings.Split(*newFramePtr, "\n")
-//
-// 	var diff string = ""
-// 	var prevCharEqual bool = false
-//
-// 	for line := 0; line < len(oldLines); line++ {
-// 		for char := 0; char < len(oldLines[0]); char++ {
-// 			if oldLines[line][char] != newLines[line][char] {
-// 				if prevCharEqual {
-// 					diff += gotoCharacter(char, line)
-// 				}
-// 				diff += string(newLines[line][char])
-// 				prevCharEqual = false
-// 				continue
-// 			}
-// 			prevCharEqual = true
-// 		}
-// 	}
-//
-// 	return diff
-// }
+func printFrame(frame *string) {
+	fmt.Print(*frame)
+}
 
 func getFrameDiff(oldFramePtr *string, newFramePtr *string) string {
 	oldFrame := *oldFramePtr
 	newFrame := *newFramePtr
 
-	var diff string = "\033[0;0H"
-	var prevCharEqual bool = false
+	var diff string = ""
+	var prevCharEqual bool = true
 
 	for char := 0; char < len(oldFrame); char++ {
 		if oldFrame[char] != newFrame[char] {
 			if prevCharEqual {
-				currentLine := int(TERMINAL_WIDTH / char)
+				currentLine := int(char / TERMINAL_WIDTH)
 				currentChar := int(char % TERMINAL_WIDTH)
-				diff += gotoCharacter(currentChar, currentLine)
+				diff += gotoCharacter(currentChar+1, currentLine+1)
 			}
 			diff += string(newFrame[char])
 			prevCharEqual = false
@@ -313,5 +301,5 @@ func getFrameDiff(oldFramePtr *string, newFramePtr *string) string {
 }
 
 func gotoCharacter(x int, y int) string {
-	return fmt.Sprintf("\033[%d;%dH", y, x)
+	return fmt.Sprintf("\033[%d;%dH", y+1, x)
 }

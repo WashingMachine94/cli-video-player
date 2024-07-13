@@ -12,7 +12,9 @@ var TEST_VIDEO Video
 
 func runTests(filepath string) {
 	TEST_VIDEO = loadVideo(filepath, TEST_BUFFER_OFFSET*2)
+	setTerminalDimensions()
 	testBufferSpeed(&TEST_VIDEO)
+	testStringDiff()
 }
 
 func testBufferSpeed(video *Video) {
@@ -35,6 +37,19 @@ func testBuffer(video *Video, startFrame int, bufferOffset int) {
 		fmt.Printf(RED_COLOR)
 	}
 	fmt.Printf("Frame: %d-%d\n", startFrame, startFrame+bufferOffset)
-	fmt.Printf("Buffertime: %d ms, MinBufferTime: %d ms\n", bufferTimeMillis, minBufferTimeMillis)
+	fmt.Printf("Buffertime: %d/%d ms\n", bufferTimeMillis, minBufferTimeMillis)
 	fmt.Printf(RESET_COLOR)
+}
+
+func testStringDiff() {
+	var a string = "@@@@     @ "
+	var b string = "@@@@@@@@  @"
+
+	// Capture the output
+	fmt.Print("\033[2J")
+	// fmt.Print("\033[0;0H", a)
+	// fmt.Print("\033[0;0H", a)
+	fmt.Print("\033[0;0H", getFrameDiff(&a, &b))
+
+	fmt.Print("\033[10;0H")
 }
