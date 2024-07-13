@@ -31,6 +31,7 @@ type Video struct {
 func loadVideo(filepath string, maxBufferLen int) Video {
 	// FFmpeg get video stream information
 	cmd := exec.Command("./ffmpeg", "-i", filepath)
+	fmt.Println(cmd.String())
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -85,6 +86,7 @@ func loadVideo(filepath string, maxBufferLen int) Video {
 			frameBuffer: make([]Frame, 0, maxBufferLen),
 		}
 	}
+	fmt.Println("F")
 	return Video{}
 }
 

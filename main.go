@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/windows"
 	"golang.org/x/term"
 )
 
@@ -152,6 +151,7 @@ func drawMenu() {
 	fmt.Printf("\033[%d;0H", TERMINAL_HEIGHT-1)
 	fmt.Println(currentTimeText + spacing + buttons + spacing + endTime)
 	fmt.Print(progressbar)
+	fmt.Printf("\033[0;0H")
 }
 
 func handleInput() {
@@ -180,6 +180,10 @@ func handleInput() {
 			SKIP_FORWARD = true
 		}
 		if b[0] == 3 || b[0] == 113 { // EXIT: ctrl-c, q
+			fmt.Printf("\033[0;0H")
+			for i := 0; i < TERMINAL_HEIGHT; i++ {
+				fmt.Println("\n")
+			}
 			os.Exit(1)
 		}
 	}
@@ -201,7 +205,7 @@ func handleSkip() {
 }
 
 func setTerminalDimensions() {
-	fd := windows.Handle(windows.Stdout)
+	fd := int(os.Stdout.Fd())
 	width, height, err := term.GetSize(int(fd))
 	if err != nil {
 		fmt.Println(PREFIX, "Error getting terminal dimensions:", err)
@@ -218,26 +222,27 @@ func processFrame(frameptr *Frame, width int, height int, channels int) {
 	var frameWidth = TERMINAL_WIDTH
 	var frameHeight = TERMINAL_HEIGHT - 3
 
-	var pixelWidth int = int(float32(width) / float32(frameWidth))
-	var pixelHeight int = int(float32(height) / float32(frameHeight))
+	var pixelWidth float32 = float32(width) / float32(frameWidth)
+	var pixelHeight float32 = float32(height) / float32(frameHeight)
 
-	var screen string = "[q]uit"
+	// var screen string = "[q]uit [h]elp"
+	var screen string = "[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]"
 
+	screen += "\n"
 	for row := 0; row < frameHeight; row++ {
-		screen += "\n"
 		for col := 0; col < frameWidth; col++ {
-			var x int = pixelWidth * col
-			var y int = pixelHeight * row
+			var x int = int(pixelWidth * float32(col))
+			var y int = int(pixelHeight * float32(row))
 
 			var brightness int
-
-			for pixelRow := 0; pixelRow < pixelHeight; pixelRow++ {
-				for pixelCol := 0; pixelCol < pixelWidth; pixelCol++ {
+			for pixelRow := 0; pixelRow < int(pixelHeight); pixelRow++ {
+				for pixelCol := 0; pixelCol < int(pixelWidth); pixelCol++ {
 					var localIndex int = (((y + pixelRow) * width) + x + pixelCol) * channels
 					brightness += int(frame[localIndex+1])
 				}
 			}
-			brightness /= (pixelHeight * pixelWidth * channels)
+
+			brightness /= int(pixelHeight) * int(pixelWidth) * channels
 			var charIndex int
 			if brightness == 0 {
 				charIndex = len(characters) - 1
@@ -248,7 +253,6 @@ func processFrame(frameptr *Frame, width int, height int, channels int) {
 		}
 	}
 	fmt.Printf("\033[0;0H")
-	fmt.Printf("\033[2K\r")
-	fmt.Print(screen)
+	fmt.Print(screen, RESET_COLOR)
 	os.Stdout.Sync()
 }
