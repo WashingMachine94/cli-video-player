@@ -15,6 +15,7 @@ const (
 	CYAN_COLOR   string = "\033[36m"
 	RESET_COLOR  string = "\033[0m"
 	ORANGE_COLOR string = "\033[38;5;208m"
+	RED_COLOR    string = "\033[31m"
 )
 const (
 	BUTTON_BACK_H    = ORANGE_COLOR + "[" + YELLOW_COLOR + "<" + ORANGE_COLOR + "]" + RESET_COLOR
@@ -40,10 +41,15 @@ var SKIP_BACKWARD bool = false
 var SKIP_FORWARD bool = false
 
 func main() {
-	if len(os.Args) != 2 {
+	if len(os.Args) < 2 {
 		fmt.Println()
 		fmt.Println(PREFIX, "Run 'play <video_path>' to play a video,")
 		fmt.Println(strings.Repeat(" ", len(PREFIX_TEXT)), "for example: 'play video.mp4'.")
+		return
+	}
+
+	if os.Args[1] == "test" {
+		runTests(os.Args[2])
 		return
 	}
 
@@ -253,6 +259,59 @@ func processFrame(frameptr *Frame, width int, height int, channels int) {
 		}
 	}
 	fmt.Printf("\033[0;0H")
-	fmt.Print(screen, RESET_COLOR)
+	fmt.Print(screen)
 	os.Stdout.Sync()
+}
+
+// func getFrameDiff(oldFramePtr *string, newFramePtr *string) string {
+//
+// 	oldLines := strings.Split(*oldFramePtr, "\n")
+// 	newLines := strings.Split(*newFramePtr, "\n")
+//
+// 	var diff string = ""
+// 	var prevCharEqual bool = false
+//
+// 	for line := 0; line < len(oldLines); line++ {
+// 		for char := 0; char < len(oldLines[0]); char++ {
+// 			if oldLines[line][char] != newLines[line][char] {
+// 				if prevCharEqual {
+// 					diff += gotoCharacter(char, line)
+// 				}
+// 				diff += string(newLines[line][char])
+// 				prevCharEqual = false
+// 				continue
+// 			}
+// 			prevCharEqual = true
+// 		}
+// 	}
+//
+// 	return diff
+// }
+
+func getFrameDiff(oldFramePtr *string, newFramePtr *string) string {
+	oldFrame := *oldFramePtr
+	newFrame := *newFramePtr
+
+	var diff string = "\033[0;0H"
+	var prevCharEqual bool = false
+
+	for char := 0; char < len(oldFrame); char++ {
+		if oldFrame[char] != newFrame[char] {
+			if prevCharEqual {
+				currentLine := int(TERMINAL_WIDTH / char)
+				currentChar := int(char % TERMINAL_WIDTH)
+				diff += gotoCharacter(currentChar, currentLine)
+			}
+			diff += string(newFrame[char])
+			prevCharEqual = false
+			continue
+		}
+		prevCharEqual = true
+	}
+
+	return diff
+}
+
+func gotoCharacter(x int, y int) string {
+	return fmt.Sprintf("\033[%d;%dH", y, x)
 }

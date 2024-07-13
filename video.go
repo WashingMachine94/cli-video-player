@@ -31,7 +31,6 @@ type Video struct {
 func loadVideo(filepath string, maxBufferLen int) Video {
 	// FFmpeg get video stream information
 	cmd := exec.Command("./ffmpeg", "-i", filepath)
-	fmt.Println(cmd.String())
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -120,7 +119,6 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 	done := make(chan error, 1)
 
 	go func() {
-		var f int = 0
 		buf := make(Frame, frameSize)
 		for {
 			n, err := io.ReadFull(stdout, buf)
@@ -139,7 +137,6 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 				video.bufferMutex.Lock()
 				video.frameBuffer = append(video.frameBuffer, frame)
 				video.bufferMutex.Unlock()
-				f++
 			}
 			if n != frameSize {
 				fmt.Println("Frame size mismatch: expected", frameSize, "got", n)
