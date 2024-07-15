@@ -14,7 +14,8 @@ func runTests(filepath string) {
 	TEST_VIDEO = loadVideo(filepath, TEST_BUFFER_OFFSET*2)
 	setTerminalDimensions()
 	testBufferSpeed(&TEST_VIDEO)
-	testStringDiff()
+	// testStringDiff()
+	testDrawSpeed(&TEST_VIDEO, 2)
 }
 
 func testBufferSpeed(video *Video) {
@@ -47,13 +48,42 @@ func testStringDiff() {
 
 	// Capture the output
 	fmt.Print("\033[2J")
-	// fmt.Print("\033[0;0H", a)
-	// fmt.Print("\033[0;0H", a)
 	fmt.Print("\033[0;0H", getFrameDiff(&a, &b))
-
 	fmt.Print("\033[10;0H")
 }
 
-func testDrawSpeed(video *Video) {
+func testDrawSpeed(video *Video, durationSec int) {
+
+	clearBuffer(video)
+	bufferVideo(video, 1000, int(video.fps)*durationSec)
+
+	startTime := time.Now()
+
+	frame, _ := getFrame(video)
+	oldFrame := processFrame(frame, video.width, video.height, 3)
+	printFrame(oldFrame)
+	shiftBuffer(video)
+
+	for i := 0; i < len(video.frameBuffer); i++ {
+		frame, _ := getFrame(video)
+		setTerminalDimensions()
+		newFrame := processFrame(frame, video.width, video.height, 3)
+		frameDiff := getFrameDiff(oldFrame, newFrame)
+		printFrame(&frameDiff)
+		oldFrame = newFrame
+
+		shiftBuffer(video)
+		video.currentFrame++
+	}
+
+	deltaTime := time.Now().Sub(startTime)
+	if deltaTime.Milliseconds() > int64(durationSec*1000) {
+		fmt.Printf(RED_COLOR)
+	}
+
+	fmt.Printf("Frame: %d-%d\n", 0, int(video.fps)*durationSec)
+	fmt.Printf("Drawtime: %d/%dms\n", deltaTime.Milliseconds(), time.Second*time.Duration(durationSec))
+
+	fmt.Printf(RESET_COLOR)
 
 }

@@ -30,7 +30,7 @@ type Video struct {
 
 func loadVideo(filepath string, maxBufferLen int) Video {
 	// FFmpeg get video stream information
-	cmd := exec.Command("./ffmpeg", "-i", filepath)
+	cmd := exec.Command("ffmpeg", "-i", filepath)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -103,7 +103,7 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 		"-",
 	}
 
-	cmd := exec.Command("./ffmpeg", args...)
+	cmd := exec.Command("ffmpeg", args...)
 	stdout, err := cmd.StdoutPipe()
 
 	if err != nil {
