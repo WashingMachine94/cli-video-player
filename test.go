@@ -53,3 +53,7 @@ func testStringDiff() {
 
 	fmt.Print("\033[10;0H")
 }
+
+func testDrawSpeed(video *Video) {
+
+}

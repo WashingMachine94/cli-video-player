@@ -23,7 +23,7 @@ const (
 	BUTTON_FORWARD_H = ORANGE_COLOR + "[" + YELLOW_COLOR + ">" + ORANGE_COLOR + "]" + RESET_COLOR
 	BUTTON_FORWARD   = "[>]"
 	BUTTON_PLAYING   = "  ||  "
-	BUTTON_PAUSED    = "  ▶  "
+	BUTTON_PAUSED    = YELLOW_COLOR + "  ||  " + RESET_COLOR
 )
 
 const PREFIX_TEXT = "VideoPlayer:"
@@ -78,7 +78,7 @@ func playVideo(path string) {
 
 	frame, _ := getFrame(&CURRENT_VIDEO)
 	oldFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
-	fmt.Println("[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]")
+	// fmt.Println("[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]")
 	printFrame(oldFrame)
 	shiftBuffer(&CURRENT_VIDEO)
 
@@ -100,7 +100,7 @@ func playVideo(path string) {
 				}
 				CURRENT_VIDEO.currentFrame++
 			} else {
-				time.Sleep(1 * time.Second)
+				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 		}
@@ -137,7 +137,7 @@ func drawMenu() {
 		buttons += BUTTON_BACK
 	}
 	if PAUSED {
-		buttonsWidth = 11
+		buttonsWidth = 12
 		buttons += BUTTON_PAUSED
 	} else {
 		buttonsWidth = 12
@@ -199,6 +199,7 @@ func handleInput() {
 			for i := 0; i < TERMINAL_HEIGHT; i++ {
 				fmt.Println("\n")
 			}
+			fmt.Println(RESET_COLOR)
 			os.Exit(1)
 		}
 	}
@@ -208,13 +209,15 @@ func handleSkip() {
 	if SKIP_FORWARD {
 		stepForward(&CURRENT_VIDEO)
 		frame, _ := getFrame(&CURRENT_VIDEO)
-		processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		printFrame(previewFrame)
 		SKIP_FORWARD = false
 	}
 	if SKIP_BACKWARD {
 		stepBackward(&CURRENT_VIDEO)
 		frame, _ := getFrame(&CURRENT_VIDEO)
-		processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		printFrame(previewFrame)
 		SKIP_BACKWARD = false
 	}
 }
@@ -240,8 +243,6 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 	var pixelWidth float32 = float32(width) / float32(frameWidth)
 	var pixelHeight float32 = float32(height) / float32(frameHeight)
 
-	// var screen string = "[q]uit [h]elp"
-	// var screen string = "[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]"
 	var screen string = ""
 
 	// screen += "\n"
@@ -268,11 +269,10 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 			screen += string(characters[charIndex])
 		}
 	}
-	// fmt.Printf("\033[0;0H")
-	// fmt.Print(screen)
 	return &screen
 }
 func printFrame(frame *string) {
+	fmt.Println("[q]uit pause:[spacebar, k], backwards: [j, <]. forward: [l, >]")
 	fmt.Print(*frame)
 }
 
