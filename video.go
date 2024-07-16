@@ -183,6 +183,11 @@ func stepBackward(video *Video) {
 	}
 	bufferVideo(video, video.currentFrame, BUFFER_OFFSET)
 }
+func setFrame(video *Video, frame int) {
+	clearBuffer(video)
+	video.currentFrame = frame
+	bufferVideo(video, video.currentFrame, BUFFER_OFFSET)
+}
 func shiftBuffer(video *Video) {
 	video.bufferMutex.Lock()
 	defer video.bufferMutex.Unlock()

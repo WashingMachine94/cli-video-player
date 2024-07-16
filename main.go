@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ const (
 	BUTTON_FORWARD   = "[>]"
 	BUTTON_PLAYING   = "  ||  "
 	BUTTON_PAUSED    = YELLOW_COLOR + "  ||  " + RESET_COLOR
+	HELP_MENU        = "[q]uit  pause[spacebar, k]  backwards[j, <]  forward[l, >]  goto[0-9]"
 )
 
 const PREFIX_TEXT = "VideoPlayer:"
@@ -40,6 +42,8 @@ var PAUSED bool
 var DIM_CHANGE_DURING_PAUSE bool = false
 var SKIP_BACKWARD bool = false
 var SKIP_FORWARD bool = false
+var GOTO bool = false
+var GOTOPOS int = 0
 
 func main() {
 	if len(os.Args) < 2 {
@@ -58,29 +62,26 @@ func main() {
 		fmt.Println(PREFIX, "File '"+os.Args[1]+"' could not be found.")
 		return
 	}
-
-	playVideo(os.Args[1])
-}
-
-func playVideo(path string) {
-	CURRENT_VIDEO = loadVideo(path, BUFFER_OFFSET*2)
+	CURRENT_VIDEO = loadVideo(os.Args[1], BUFFER_OFFSET*2)
 	if CURRENT_VIDEO.fps == 0 {
-		fmt.Println(PREFIX, "'"+path+"' is not a valid video.")
+		fmt.Println(PREFIX, "'"+os.Args[1]+"' is not a valid video.")
 		return
 	}
+	playVideo()
+}
+
+func playVideo() {
 	bufferVideo(&CURRENT_VIDEO, 0, BUFFER_OFFSET)
 	setTerminalDimensions()
 	go handleInput()
-
 	PLAYING = true
 	PAUSED = false
-
-	drawMenu()
 
 	frame, _ := getFrame(&CURRENT_VIDEO)
 	oldFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
 	printFrame(oldFrame)
 	shiftBuffer(&CURRENT_VIDEO)
+	drawMenu()
 
 	for PLAYING {
 		startFrameTime := time.Now()
@@ -116,6 +117,7 @@ func playVideo(path string) {
 		}
 
 		drawMenu()
+		handleGoto()
 		handleSkip()
 
 		var deltaTime time.Duration = time.Now().Sub(startFrameTime)
@@ -137,10 +139,10 @@ func drawMenu() {
 
 	var currentTimeWidth int = len(fmt.Sprintf("[%d:%02d]", currentMinutes, currentSeconds))
 	var currentTimeText string = fmt.Sprintf(BLUE_COLOR+"["+CYAN_COLOR+"%d:%02d"+BLUE_COLOR+"]"+RESET_COLOR, currentMinutes, currentSeconds)
-	var endTimeWidth int = len(fmt.Sprintf("[%d:%02d]", endMinutes, endSeconds))
-	var endTime string = fmt.Sprintf(BLUE_COLOR+"["+CYAN_COLOR+"%d:%02d"+BLUE_COLOR+"]"+RESET_COLOR, endMinutes, endSeconds)
+	var endTimeWidth int = len(fmt.Sprintf("[%02d:%02d]", endMinutes, endSeconds))
+	var endTime string = fmt.Sprintf(BLUE_COLOR+"["+CYAN_COLOR+"%02d:%02d"+BLUE_COLOR+"]"+RESET_COLOR, endMinutes, endSeconds)
 
-	var buttonsWidth int = 0
+	var buttonsWidth int = 12
 	var buttons string = ""
 	if SKIP_BACKWARD {
 		buttons += BUTTON_BACK_H
@@ -148,10 +150,8 @@ func drawMenu() {
 		buttons += BUTTON_BACK
 	}
 	if PAUSED {
-		buttonsWidth = 12
 		buttons += BUTTON_PAUSED
 	} else {
-		buttonsWidth = 12
 		buttons += BUTTON_PLAYING
 	}
 	if SKIP_FORWARD {
@@ -159,8 +159,9 @@ func drawMenu() {
 	} else {
 		buttons += BUTTON_FORWARD
 	}
-
-	var spacing string = strings.Repeat(" ", (TERMINAL_WIDTH-currentTimeWidth-endTimeWidth-buttonsWidth)/2)
+	var spacingWidth float64 = float64(TERMINAL_WIDTH-currentTimeWidth-endTimeWidth-buttonsWidth) / 2
+	var oddSpacing bool = spacingWidth-math.Floor(spacingWidth) >= 0.5
+	var spacing string = strings.Repeat(" ", int(spacingWidth))
 
 	var progressProcent float64 = float64(currentTime) / float64(runtime)
 	var progressChars int = int((float64(TERMINAL_WIDTH) - 2) * progressProcent)
@@ -175,14 +176,14 @@ func drawMenu() {
 	}
 	gotoPos := fmt.Sprintf("\033[%d;0H", TERMINAL_HEIGHT-1)
 	var menubar string
-	if TERMINAL_WIDTH%2 == 0 {
-		menubar = currentTimeText + spacing + buttons + spacing + endTime
-	} else {
+	if oddSpacing {
 		menubar = currentTimeText + spacing + buttons + spacing + " " + endTime
+	} else {
+		menubar = currentTimeText + spacing + buttons + spacing + endTime
 	}
 	progressbar += BLUE_COLOR + "]" + RESET_COLOR
 
-	fmt.Print(gotoPos + menubar + progressbar + "\033[0;0H")
+	fmt.Print(gotoPos + menubar + gotoCharacter(0, TERMINAL_HEIGHT) + progressbar + "\033[0;0H")
 }
 
 func handleInput() {
@@ -190,6 +191,7 @@ func handleInput() {
 		oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 		if err != nil {
 			fmt.Println(err)
+			exit()
 			return
 		}
 		defer term.Restore(int(os.Stdin.Fd()), oldState)
@@ -204,6 +206,10 @@ func handleInput() {
 		if b[0] == 32 || b[0] == 107 { // PAUSING: SPACEBAR, k
 			PAUSED = !PAUSED
 		}
+		if b[0] >= 48 && b[0] <= 58 { // GOTO: 0-9
+			GOTO = true
+			GOTOPOS = int(b[0]) - 48
+		}
 		if b[0] == 106 || b[0] == 60 { // SKIP BACK: j, <
 			SKIP_BACKWARD = true
 		}
@@ -212,6 +218,7 @@ func handleInput() {
 		}
 		if b[0] == 3 || b[0] == 113 { // EXIT: ctrl-c, q
 			exit()
+			return
 		}
 	}
 }
@@ -232,6 +239,19 @@ func handleSkip() {
 		SKIP_BACKWARD = false
 	}
 }
+func handleGoto() {
+	if !GOTO {
+		return
+	}
+	targetFrame := (CURRENT_VIDEO.totalFrames / 10) * GOTOPOS
+
+	setFrame(&CURRENT_VIDEO, targetFrame)
+	frame, _ := getFrame(&CURRENT_VIDEO)
+	previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+	printFrame(previewFrame)
+	GOTO = false
+
+}
 func exit() {
 	// clear screen before exiting
 	fmt.Printf("\033[0;0H")
@@ -247,7 +267,7 @@ func setTerminalDimensions() bool {
 	width, height, err := term.GetSize(int(fd))
 	if err != nil {
 		fmt.Println(PREFIX, "Error getting terminal dimensions:", err)
-		os.Exit(1)
+		exit()
 	}
 	widthChanged := width != TERMINAL_WIDTH
 	heightChanged := height != TERMINAL_HEIGHT
@@ -257,9 +277,12 @@ func setTerminalDimensions() bool {
 	return widthChanged || heightChanged
 }
 
+// Converts a video frame to ASCII
 func processFrame(frameptr *Frame, width int, height int, channels int) *string {
 	frame := *frameptr
 	var characters string = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/()1{}[]?-_+~<>i!lI;:,^`'. "
+
+	// TODO: Preserve aspect ratio.
 
 	var frameWidth = TERMINAL_WIDTH
 	var frameHeight = TERMINAL_HEIGHT - 3
@@ -274,6 +297,7 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 			var x int = int(pixelWidth * float32(col))
 			var y int = int(pixelHeight * float32(row))
 
+			// get average of all frame pixels within ASCII pixel
 			var brightness int
 			for pixelRow := 0; pixelRow < int(pixelHeight); pixelRow++ {
 				for pixelCol := 0; pixelCol < int(pixelWidth); pixelCol++ {
@@ -295,10 +319,12 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 	return &screen
 }
 func printFrame(frame *string) {
-	fmt.Print("\033[K\033[1G" + gotoCharacter(0, 0) + "[q]uit  pause[spacebar, k]  backwards[j, <]  forward[l, >]" + gotoCharacter(0, 1) + *frame)
-	// fmt.Print(*frame)
+	fmt.Print("\033[K\033[1G" + gotoCharacter(0, 0) + HELP_MENU + gotoCharacter(0, 1) + *frame)
 }
 
+// Gets the difference between 2 ASCII frames.
+// Result also contains escape characters to move cursor to right locations.
+// This results in having to print less characters to the screen.
 func getFrameDiff(oldFramePtr *string, newFramePtr *string) string {
 	oldFrame := *oldFramePtr
 	newFrame := *newFramePtr
