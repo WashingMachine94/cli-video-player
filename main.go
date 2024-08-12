@@ -286,6 +286,7 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 
 	var frameWidth = TERMINAL_WIDTH
 	var frameHeight = TERMINAL_HEIGHT - 3
+	var gamma float64 = 0.7
 
 	var pixelWidth float32 = float32(width) / float32(frameWidth)
 	var pixelHeight float32 = float32(height) / float32(frameHeight)
@@ -297,22 +298,23 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 			var x int = int(pixelWidth * float32(col))
 			var y int = int(pixelHeight * float32(row))
 
-			// get average of all frame pixels within ASCII pixel
-			var brightness int
+			var brightnessSum int
 			for pixelRow := 0; pixelRow < int(pixelHeight); pixelRow++ {
 				for pixelCol := 0; pixelCol < int(pixelWidth); pixelCol++ {
 					var localIndex int = (((y + pixelRow) * width) + x + pixelCol) * channels
-					brightness += int(frame[localIndex+1])
+					var r = int(frame[localIndex])
+					var g = int(frame[localIndex+1])
+					var b = int(frame[localIndex+2])
+					var brightness = 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
+					brightnessSum += int(brightness)
 				}
 			}
 
-			brightness /= int(pixelHeight) * int(pixelWidth) * channels
-			var charIndex int
-			if brightness == 0 {
-				charIndex = len(characters) - 1
-			} else {
-				charIndex = (len(characters) - 1) / brightness
-			}
+			var averageBrightness float64 = float64(brightnessSum / (int(pixelHeight) * int(pixelWidth) * 3))
+			var normalizedBrightness float64 = averageBrightness / 255.0
+			var gammaCorrectedBrightness = math.Pow(normalizedBrightness, gamma)
+
+			var charIndex = int(gammaCorrectedBrightness * float64(len(characters)-1))
 			screen += string(characters[charIndex])
 		}
 	}
@@ -320,6 +322,34 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 }
 func printFrame(frame *string) {
 	fmt.Print("\033[K\033[1G" + gotoCharacter(0, 0) + HELP_MENU + gotoCharacter(0, 1) + *frame)
+}
+
+func generateGaussianKernel(sigma float64) [][]float64 {
+	radius := int(math.Ceil(3 * sigma)) // Kernel size of 7 '(7 - 1) / 2 = 3'
+	size := 2*radius + 1
+	kernel := make([][]float64, size)
+
+	var sum float64
+
+	// Calculate each value in the kernel
+	for i := 0; i < size; i++ {
+		kernel[i] = make([]float64, size)
+		for j := 0; j < size; j++ {
+			x := float64(i - radius)
+			y := float64(j - radius)
+			kernel[i][j] = (1 / (2 * math.Pi * sigma * sigma)) * math.Exp(-(x*x+y*y)/(2*sigma*sigma))
+			sum += kernel[i][j]
+		}
+	}
+
+	// Normalize the kernel to sum of 1
+	for i := 0; i < size; i++ {
+		for j := 0; j < size; j++ {
+			kernel[i][j] /= sum
+		}
+	}
+
+	return kernel
 }
 
 // Gets the difference between 2 ASCII frames.
