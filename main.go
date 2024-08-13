@@ -33,6 +33,7 @@ const PREFIX string = YELLOW_COLOR + PREFIX_TEXT + RESET_COLOR
 const BUFFER_SIZE int = 15
 const BUFFER_OFFSET int = 30
 const SKIP_AMOUNT_S int = 10
+const CHANNELS = 1
 
 var CURRENT_VIDEO Video
 var TERMINAL_WIDTH int
@@ -78,7 +79,7 @@ func playVideo() {
 	PAUSED = false
 
 	frame, _ := getFrame(&CURRENT_VIDEO)
-	oldFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+	oldFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, CHANNELS)
 	printFrame(oldFrame)
 	shiftBuffer(&CURRENT_VIDEO)
 	drawMenu()
@@ -89,7 +90,7 @@ func playVideo() {
 		frame, exists := getFrame(&CURRENT_VIDEO)
 		if !PAUSED {
 			if exists {
-				newFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+				newFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, CHANNELS)
 				if dimChanged || DIM_CHANGE_DURING_PAUSE {
 					printFrame(newFrame)
 					DIM_CHANGE_DURING_PAUSE = false
@@ -111,7 +112,7 @@ func playVideo() {
 		}
 		if PAUSED && dimChanged {
 			frame, _ := getFrame(&CURRENT_VIDEO)
-			oldFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+			oldFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, CHANNELS)
 			printFrame(oldFrame)
 			DIM_CHANGE_DURING_PAUSE = true
 		}
@@ -227,14 +228,14 @@ func handleSkip() {
 	if SKIP_FORWARD {
 		stepForward(&CURRENT_VIDEO)
 		frame, _ := getFrame(&CURRENT_VIDEO)
-		previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, CHANNELS)
 		printFrame(previewFrame)
 		SKIP_FORWARD = false
 	}
 	if SKIP_BACKWARD {
 		stepBackward(&CURRENT_VIDEO)
 		frame, _ := getFrame(&CURRENT_VIDEO)
-		previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+		previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, CHANNELS)
 		printFrame(previewFrame)
 		SKIP_BACKWARD = false
 	}
@@ -247,7 +248,7 @@ func handleGoto() {
 
 	setFrame(&CURRENT_VIDEO, targetFrame)
 	frame, _ := getFrame(&CURRENT_VIDEO)
-	previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, 3)
+	previewFrame := processFrame(frame, CURRENT_VIDEO.width, CURRENT_VIDEO.height, CHANNELS)
 	printFrame(previewFrame)
 	GOTO = false
 
@@ -302,11 +303,7 @@ func processFrame(frameptr *Frame, width int, height int, channels int) *string 
 			for pixelRow := 0; pixelRow < int(pixelHeight); pixelRow++ {
 				for pixelCol := 0; pixelCol < int(pixelWidth); pixelCol++ {
 					var localIndex int = (((y + pixelRow) * width) + x + pixelCol) * channels
-					var r = int(frame[localIndex])
-					var g = int(frame[localIndex+1])
-					var b = int(frame[localIndex+2])
-					var brightness = 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
-					brightnessSum += int(brightness)
+					brightnessSum += int(frame[localIndex])
 				}
 			}
 

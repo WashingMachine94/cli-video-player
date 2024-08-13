@@ -95,10 +95,10 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 		"-ss", fmt.Sprintf("%.6f", float64(startFrame)/video.fps),
 		"-i", video.filepath,
 		"-frames:v", strconv.Itoa(frameAmount),
-		"-vf", fmt.Sprintf("fps=%.5f", video.fps),
+		"-vf", fmt.Sprintf("fps=%.5f,format=gray", video.fps),
 		"-f", "image2pipe",
 		"-vcodec", "rawvideo",
-		"-pix_fmt", "rgb24",
+		"-pix_fmt", "gray",
 		"-vsync", "vfr",
 		"-",
 	}
@@ -115,7 +115,7 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 		log.Fatalf("Failed to start FFmpeg command: %v", err)
 	}
 
-	frameSize := video.width * video.height * 3
+	frameSize := video.width * video.height * CHANNELS
 	done := make(chan error, 1)
 
 	go func() {
