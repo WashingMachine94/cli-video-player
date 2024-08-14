@@ -13,9 +13,9 @@ var TEST_VIDEO Video
 func runTests(filepath string) {
 	TEST_VIDEO = loadVideo(filepath, TEST_BUFFER_OFFSET*2)
 	setTerminalDimensions()
-	testBufferSpeed(&TEST_VIDEO)
-	// testStringDiff()
-	testDrawSpeed(&TEST_VIDEO, 2)
+	// testBufferSpeed(&TEST_VIDEO)
+	testGaussianBlur(&TEST_VIDEO)
+	// testDrawSpeed(&TEST_VIDEO, 2)
 }
 
 func testBufferSpeed(video *Video) {
@@ -40,34 +40,24 @@ func testBuffer(video *Video, startFrame int, bufferOffset int) {
 	fmt.Printf("Frame: %d-%d\n", startFrame, startFrame+bufferOffset)
 	fmt.Printf("Buffertime: %d/%d ms\n", bufferTimeMillis, minBufferTimeMillis)
 	fmt.Printf(RESET_COLOR)
-}
-
-func testStringDiff() {
-	var a string = "@@@@     @ "
-	var b string = "@@@@@@@@  @"
-
-	// Capture the output
-	fmt.Print("\033[2J")
-	fmt.Print("\033[0;0H", getFrameDiff(&a, &b))
-	fmt.Print("\033[10;0H")
+	clearBuffer(video)
 }
 
 func testDrawSpeed(video *Video, durationSec int) {
-
 	clearBuffer(video)
 	bufferVideo(video, 1000, int(video.fps)*durationSec)
 
 	startTime := time.Now()
 
 	frame, _ := getFrame(video)
-	oldFrame := processFrame(frame, video.width, video.height, 3)
+	oldFrame := processFrame(frame, video.width, video.height, CHANNELS)
 	printFrame(oldFrame)
 	shiftBuffer(video)
 
 	for i := 0; i < len(video.frameBuffer); i++ {
 		frame, _ := getFrame(video)
 		setTerminalDimensions()
-		newFrame := processFrame(frame, video.width, video.height, 3)
+		newFrame := processFrame(frame, video.width, video.height, CHANNELS)
 		frameDiff := getFrameDiff(oldFrame, newFrame)
 		printFrame(&frameDiff)
 		oldFrame = newFrame
@@ -85,5 +75,16 @@ func testDrawSpeed(video *Video, durationSec int) {
 	fmt.Printf("Drawtime: %d/%dms\n", deltaTime.Milliseconds(), time.Second*time.Duration(durationSec))
 
 	fmt.Printf(RESET_COLOR)
+	clearBuffer(video)
+}
 
+func testGaussianBlur(video *Video) {
+	bufferVideo(video, video.totalFrames/9, TEST_BUFFER_OFFSET)
+	frame, _ := getFrame(video)
+
+	blurredFrame := gaussianBlur(video, frame, 1, 2)
+	blurredFrame1 := gaussianBlur(video, frame, 2, 4)
+	frame = subtractFrame(&blurredFrame, &blurredFrame1)
+	asciiString := processFrame(frame, video.width, video.height, 1)
+	printFrame(asciiString)
 }
