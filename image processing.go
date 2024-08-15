@@ -7,8 +7,13 @@ import (
 
 // Preprocesses a frame and converts to ASCII
 func processFrame(frameptr *Frame, width int, height int, channels int) *string {
-	screen := frameToAscii(frameptr, width, height, channels, DEFAULT_ASCII)
-	return screen
+	asciiFrame := frameToAscii(frameptr, width, height, channels, DEFAULT_ASCII)
+	// blurredFrame := gaussianBlur(width, height, frameptr, 1, 2)
+	// blurredFrame1 := gaussianBlur(width, height, frameptr, 2, 4)
+	// edgeFrame := subtractFrame(&blurredFrame, &blurredFrame1)
+	// edgeOverlay := frameToAscii(edgeFrame, width, height, channels, EDGE_ASCII)
+	// screen := addString(asciiFrame, edgeOverlay)
+	return asciiFrame
 }
 
 func frameToAscii(frameptr *Frame, width int, height int, channels int, characters string) *string {
@@ -38,11 +43,11 @@ func frameToAscii(frameptr *Frame, width int, height int, channels int, characte
 				}
 			}
 
-			var averageBrightness float64 = float64(brightnessSum / (int(pixelHeight) * int(pixelWidth) * 2))
+			var averageBrightness float64 = float64(brightnessSum / (int(pixelHeight) * int(pixelWidth)))
 			var normalizedBrightness float64 = averageBrightness / 255.0
 			var gammaCorrectedBrightness = math.Pow(normalizedBrightness, gamma)
 
-			var charIndex = int(gammaCorrectedBrightness * float64(len(characters)-1))
+			var charIndex = int((1 - gammaCorrectedBrightness) * float64(len(characters)-1))
 			screen += string(characters[charIndex])
 		}
 	}
@@ -66,6 +71,25 @@ func subtractFrame(firstFrame *Frame, secondFrame *Frame) *Frame {
 	}
 
 	return &frameDiff
+}
+
+// overlays the second string on top of the first (space characters are ignored)
+func addString(firstFrame *string, secondFrame *string) *string {
+	if len(*firstFrame) != len(*secondFrame) {
+		fmt.Errorf("addString(): Strings are not of the same size")
+	}
+
+	var frameSum string
+
+	for i := 0; i < len(*firstFrame); i++ {
+		if (*secondFrame)[i] == ' ' {
+			frameSum += string((*firstFrame)[i])
+			continue
+		}
+		frameSum += string((*secondFrame)[i])
+	}
+
+	return &frameSum
 }
 
 func printFrame(frame *string) {
@@ -99,13 +123,13 @@ func generateGaussianKernel(radius int, sigma float64) [][]float64 {
 	return kernel
 }
 
-func gaussianBlur(video *Video, frameptr *Frame, sigma float64, radius int) Frame {
+func gaussianBlur(width int, height int, frameptr *Frame, sigma float64, radius int) Frame {
 	var kernel [][]float64 = generateGaussianKernel(radius, sigma)
 	var blurredFrame Frame
 	frame := *frameptr
 
-	for y := 0; y < video.height; y++ {
-		for x := 0; x < video.width; x++ {
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
 
 			var blurredPixel float64
 
@@ -114,13 +138,13 @@ func gaussianBlur(video *Video, frameptr *Frame, sigma float64, radius int) Fram
 					var combinedX int = x + kernelX
 					var combinedY int = y + kernelY
 
-					if combinedX < 0 || combinedX >= video.width {
+					if combinedX < 0 || combinedX >= width {
 						continue
 					}
-					if combinedY < 0 || combinedY >= video.height {
+					if combinedY < 0 || combinedY >= height {
 						continue
 					}
-					var index int = combinedX + combinedY*video.width
+					var index int = combinedX + combinedY*width
 					blurredPixel += float64(frame[index]) * kernel[kernelX+radius][kernelY+radius]
 				}
 			}

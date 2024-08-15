@@ -35,8 +35,9 @@ const BUFFER_OFFSET int = 30
 const SKIP_AMOUNT_S int = 10
 const CHANNELS = 1
 
-const DEFAULT_ASCII string = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/()1{}[]?-_+~<>i!lI;:,^`'. "
-const EDGE_ASCII string = "/\\|-"
+// const DEFAULT_ASCII string = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/()1{}[]?-_+~<>i!lI;:,^`'. "
+const DEFAULT_ASCII string = "%@#*+=-:. "
+const EDGE_ASCII string = " .*@"
 
 var CURRENT_VIDEO Video
 var TERMINAL_WIDTH int

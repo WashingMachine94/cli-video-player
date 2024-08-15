@@ -82,8 +82,8 @@ func testGaussianBlur(video *Video) {
 	bufferVideo(video, video.totalFrames/9, TEST_BUFFER_OFFSET)
 	frame, _ := getFrame(video)
 
-	blurredFrame := gaussianBlur(video, frame, 1, 2)
-	blurredFrame1 := gaussianBlur(video, frame, 2, 4)
+	blurredFrame := gaussianBlur(video.width, video.height, frame, 1, 2)
+	blurredFrame1 := gaussianBlur(video.width, video.height, frame, 2, 4)
 	frame = subtractFrame(&blurredFrame, &blurredFrame1)
 	asciiString := processFrame(frame, video.width, video.height, 1)
 	printFrame(asciiString)
