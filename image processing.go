@@ -8,18 +8,11 @@ import (
 // Preprocesses a frame and converts to ASCII
 func processFrame(frameptr *Frame, width int, height int, channels int) *string {
 	asciiFrame := frameToAscii(frameptr, width, height, channels, DEFAULT_ASCII)
-	// blurredFrame := gaussianBlur(width, height, frameptr, 1, 2)
-	// blurredFrame1 := gaussianBlur(width, height, frameptr, 2, 4)
-	// edgeFrame := subtractFrame(&blurredFrame, &blurredFrame1)
-	// edgeOverlay := frameToAscii(edgeFrame, width, height, channels, EDGE_ASCII)
-	// screen := addString(asciiFrame, edgeOverlay)
 	return asciiFrame
 }
 
 func frameToAscii(frameptr *Frame, width int, height int, channels int, characters string) *string {
 	frame := *frameptr
-
-	// TODO: Preserve aspect ratio.
 
 	var frameWidth = TERMINAL_WIDTH
 	var frameHeight = TERMINAL_HEIGHT - 3

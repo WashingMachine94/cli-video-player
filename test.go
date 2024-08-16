@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"golang.org/x/term"
+	"os"
 	"time"
 )
 
@@ -14,7 +16,9 @@ func runTests(filepath string) {
 	TEST_VIDEO = loadVideo(filepath, TEST_BUFFER_OFFSET*2)
 	setTerminalDimensions()
 	// testBufferSpeed(&TEST_VIDEO)
-	testGaussianBlur(&TEST_VIDEO)
+	// testGaussianBlur(&TEST_VIDEO)
+	// testAspectRatio(&TEST_VIDEO)
+	testInput()
 	// testDrawSpeed(&TEST_VIDEO, 2)
 }
 
@@ -87,4 +91,49 @@ func testGaussianBlur(video *Video) {
 	frame = subtractFrame(&blurredFrame, &blurredFrame1)
 	asciiString := processFrame(frame, video.width, video.height, 1)
 	printFrame(asciiString)
+}
+
+func testAspectRatio(video *Video) {
+	bufferVideo(video, video.totalFrames/9, TEST_BUFFER_OFFSET)
+	frame, _ := getFrame(video)
+	setTerminalDimensions()
+	asciiString := processFrame(frame, video.width, video.height, 1)
+	printFrame(asciiString)
+}
+
+func testInput() {
+	fd := int(os.Stdin.Fd())
+
+	// Save the original terminal state and set raw mode
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		fmt.Println("Error setting raw mode:", err)
+		return
+	}
+	defer term.Restore(fd, oldState)
+
+	// Enable mouse reporting (basic mode)
+	os.Stdout.WriteString("\x1b[?1000h")
+	defer os.Stdout.WriteString("\x1b[?1000l") // Disable mouse reporting on exit
+
+	// Create a buffer to hold input data
+	buf := make([]byte, 1024)
+
+	for {
+		// Read from stdin
+		n, err := os.Stdin.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading from stdin:", err)
+			return
+		}
+
+		if n > 0 {
+			data := buf[:n]
+			if len(data) > 1 && data[0] == 27 && data[1] == 91 && data[2] == 77 {
+				fmt.Println(data)
+			} else {
+				fmt.Printf("Read %d bytes: %v\n", n, data)
+			}
+		}
+	}
 }

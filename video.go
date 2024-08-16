@@ -85,7 +85,6 @@ func loadVideo(filepath string, maxBufferLen int) Video {
 			frameBuffer: make([]Frame, 0, maxBufferLen),
 		}
 	}
-	fmt.Println("F")
 	return Video{}
 }
 
@@ -102,7 +101,6 @@ func bufferVideo(video *Video, startFrame int, frameAmount int) {
 		"-vsync", "vfr",
 		"-",
 	}
-
 	cmd := exec.Command("ffmpeg", args...)
 	stdout, err := cmd.StdoutPipe()
 
